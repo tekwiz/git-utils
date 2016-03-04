@@ -1,0 +1,89 @@
+#!/bin/sh
+
+USAGE='<version> [<branch>]'
+LONG_USAGE='Finish the release/hotfix.'
+
+. "$(git --exec-path)/git-sh-setup"
+
+require_clean_work_tree finish "Ensure your working directory is clean."
+
+version="$1"
+[ -z "$version" ] && die "$(usage)"
+version="${version#v}"
+
+branch="$(git rev-parse --symbolic --verify --quiet --default HEAD $2)"
+if [[ "$branch" = "HEAD" ]]; then
+  branch="$(git symbolic-ref -q --short "$branch")"
+elif [[ -z "$branch" ]]; then
+  die "Invalid branch: $2"
+elif [[ "$branch" = 'master' ]] || [[ "$branch" = 'develop' ]]; then
+  die "Cannot finish $branch"
+fi
+
+release_type="Release"
+[ "${branch:0:7}" = 'hotfix/' ] && release_type="Hotfix"
+
+say "Finishing $branch as v$version."
+
+###
+# Merge release/hotfix into master
+say "Merging $branch into master."
+git checkout --quiet master
+[ $? -ne 0 ] && die_with_status $? 'Failed to checkout master'
+
+git merge --quiet --no-ff -m "Merge $branch" --log --no-edit "$branch"
+[ $? -ne 0 ] && die_with_status $? "Failed to merge $branch into master"
+
+git tag -m "v$version" "v$version" "$(git rev-parse master)"
+[ $? -ne 0 ] && die_with_status $? "Failed to tag master as v$version"
+say "$release_type tagged as v$version."
+
+###
+# Back-merge master into develop (fast-forward)
+git checkout --quiet develop
+[ $? -ne 0 ] && die_with_status $? 'Failed to checkout develop'
+
+if [[ $release_type = 'Hotfix' ]]; then
+  say "Back-merging master into develop for hotfix."
+  git merge --quiet --no-ff -m "Merge master to develop for $branch" --no-edit master
+  [ $? -ne 0 ] && die_with_status $? 'Failed to back-merge master into develop'
+else
+  say "Fast-forwarding develop to master."
+  git merge --quiet --ff-only master
+  [ $? -ne 0 ] && die_with_status $? 'Failed to fast-forward develop to master'
+fi
+
+###
+# Push to origin & upstream
+say "Pushing master and devlop to origin and upstream remotes."
+git push --quiet origin develop
+[ $? -ne 0 ] && die_with_status $? 'Failed to push develop'
+
+git push --quiet upstream develop
+[ $? -ne 0 ] && die_with_status $? 'Failed to push develop to upstream'
+
+git push --quiet origin --tags "v$version"
+[ $? -ne 0 ] && die_with_status $? 'Failed to push tags'
+
+git push --quiet upstream --tags "v$version"
+[ $? -ne 0 ] && die_with_status $? 'Failed to push tags to upstream'
+
+git checkout --quiet master
+[ $? -ne 0 ] && die_with_status $? 'Failed to checkout master'
+
+git push --quiet origin master
+[ $? -ne 0 ] && die_with_status $? 'Failed to push master'
+
+git push --quiet upstream master
+[ $? -ne 0 ] && die_with_status $? 'Failed to push master to upstream'
+
+###
+# Remove release branch
+say "Cleaning up $release_type branch $branch."
+git push --quiet upstream ":$branch"
+[ $? -ne 0 ] && die_with_status $? "Failed to cleanup $branch from upstream"
+
+git branch --quiet -d "$branch"
+[ $? -ne 0 ] && die_with_status $? "Failed to cleanup $branch"
+
+say "All done!"
