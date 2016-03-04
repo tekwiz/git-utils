@@ -1,0 +1,43 @@
+#!/bin/sh
+
+USAGE='<release-type> <version>'
+LONG_USAGE='Start a release/hotfix.'
+
+. "$(git --exec-path)/git-sh-setup"
+
+release_type="$1"
+[ -z "$release_type" ] && die "$(usage)"
+version="$2"
+[ -z "$version" ] && die "$(usage)"
+version="${version#v}"
+
+if [[ "$release_type" = 'hotfix' ]] || [[ "$release_type" = 'release' ]]; then
+  true
+else
+  die "Invalid release type.  Must be 'release' or 'hotfix'"
+fi
+
+branch="$release_type/$version"
+
+###
+# Create branch
+if [[ "$release_type" = 'hotfix' ]]; then
+  say "Checking out new branch $branch from master."
+  git checkout --quiet master
+  [ $? -ne 0 ] && die_with_status $? 'Failed to checkout master'
+else
+  say "Checking out new branch $branch from develop."
+  git checkout --quiet develop
+  [ $? -ne 0 ] && die_with_status $? 'Failed to checkout develop'
+fi
+
+git checkout --quiet -b "$branch"
+[ $? -ne 0 ] && die_with_status $? "Failed to checkout new branch $branch."
+
+###
+# Push to upstream
+say "Pushing new branch $branch to upstream."
+git push --quiet -u upstream "$branch"
+[ $? -ne 0 ] && die_with_status $? "Failed to checkout new branch $branch."
+
+say "All done!"
