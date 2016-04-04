@@ -87,11 +87,11 @@ current_branch=""
 remote_tracked=""
 
 if [[ "$SED_IS_GNU" ]]; then
-  current_branch=$( echo $gs | sed -r 's/^\#{2} (.+?)(\.{3}(.+))|$/\1/' )
-  remote_tracked=$( echo $gs | sed -r 's/^\#{2} (.+?)(\.{3}(.+))|$/\3/' )
+  current_branch=$( sed -r 's/^\#{2} (.+?)(\.{3}(.+))|$/\1/' <<< "$gs" )
+  remote_tracked=$( sed -r 's/^\#{2} (.+?)(\.{3}(.+))|$/\3/' <<< "$gs" )
 else
-  current_branch=$( echo $gs | sed -E 's/^\#{2} (.+)(\.{3}(.+))|$/\1/' )
-  remote_tracked=$( echo $gs | sed -E 's/^\#{2} (.+)(\.{3}(.+))|$/\3/' )
+  current_branch=$( sed -E 's/^\#{2} (.+)(\.{3}(.+))|$/\1/' <<< "$gs" )
+  remote_tracked=$( sed -E 's/^\#{2} (.+)(\.{3}(.+))|$/\3/' <<< "$gs" )
 fi
 
 if [[ -z $current_branch ]] || [[ -z $remote_tracked ]]; then
