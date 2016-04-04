@@ -19,12 +19,6 @@ COLOR_ERROR="\e[1;31m"
 COLOR_WARN="\e[1;33m"
 COLOR_CMD="\e[1;37m"
 
-sed_is_gnu() {
-  echo 'foo' | sed -r 's/^foo$//' 2>/dev/null 1>/dev/null
-  [ $? == 0 ] && echo "1" || echo ""
-}
-SED_IS_GNU=` sed_is_gnu `
-
 say_error() {
   printf "%b%s%b\n" $COLOR_ERROR "$*" $COLOR_RESET 1>&2
 }
@@ -83,16 +77,8 @@ fi
 
 # parse first line of git status, which is the branch & remote info
 gs=$( git status --porcelain --branch | head -n 1 )
-current_branch=""
-remote_tracked=""
-
-if [[ "$SED_IS_GNU" ]]; then
-  current_branch=$( sed -r 's/^\#{2} (.+?)(\.{3}(.+))|$/\1/' <<< "$gs" )
-  remote_tracked=$( sed -r 's/^\#{2} (.+?)(\.{3}(.+))|$/\3/' <<< "$gs" )
-else
-  current_branch=$( sed -E 's/^\#{2} (.+)(\.{3}(.+))|$/\1/' <<< "$gs" )
-  remote_tracked=$( sed -E 's/^\#{2} (.+)(\.{3}(.+))|$/\3/' <<< "$gs" )
-fi
+current_branch=$( sed -nE -e 's/^\#{2} (.*)\.{3}.+$/\1/ p' -e 's/^## (.+)$/\1/ p' <<< "$gs" )
+remote_tracked=$( sed -nE 's/^\#{2} .+\.{3}(.+)$/\1/ p' <<< "$gs" )
 
 if [[ -z $current_branch ]] || [[ -z $remote_tracked ]]; then
   say_error "Error determining current branch and remote tracked branch" && exit 1
