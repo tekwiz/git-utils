@@ -1,0 +1,97 @@
+#!/bin/sh
+
+USAGE='<action> <version>'
+LONG_USAGE='Start or finish a release.'
+
+. "$(git --exec-path)/git-sh-setup"
+
+require_clean_work_tree finish "Ensure your working directory is clean."
+
+action="$1"
+[ -z "$action" ] && die "$(usage)"
+version="$2"
+[ -z "$version" ] && die "$(usage)"
+version="${version#v}"
+branch="release/$version"
+
+start_release() {
+  ###
+  # Create branch
+  say "Checking out new branch $branch from develop."
+  git checkout --quiet develop
+  [ $? -ne 0 ] && die_with_status $? 'Failed to checkout develop'
+
+  git checkout --quiet -b "$branch"
+  [ $? -ne 0 ] && die_with_status $? "Failed to checkout new branch $branch."
+
+  ###
+  # Push to upstream
+  say "Pushing new branch $branch to upstream."
+  git push --quiet -u upstream "$branch"
+  [ $? -ne 0 ] && die_with_status $? "Failed to checkout new branch $branch."
+}
+
+finish_release() {
+  ###
+  # Merge release into master
+  say "Merging $branch into master."
+  git checkout --quiet master
+  [ $? -ne 0 ] && die_with_status $? 'Failed to checkout master'
+
+  git merge --quiet --no-ff -m "Merge $branch" --log --no-edit "$branch"
+  [ $? -ne 0 ] && die_with_status $? "Failed to merge $branch into master"
+
+  git tag -m "v$version" "v$version" "$(git rev-parse master)"
+  [ $? -ne 0 ] && die_with_status $? "Failed to tag master as v$version"
+  say "Release tagged as v$version."
+
+  ###
+  # Back-merge master into develop (fast-forward)
+  git checkout --quiet develop
+  [ $? -ne 0 ] && die_with_status $? 'Failed to checkout develop'
+
+  say "Fast-forwarding develop to master."
+  git merge --quiet --ff-only master
+  [ $? -ne 0 ] && die_with_status $? 'Failed to fast-forward develop to master'
+  
+  ###
+  # Push to origin & upstream
+  say "Pushing master and devlop to origin and upstream remotes."
+  git push --quiet origin develop
+  [ $? -ne 0 ] && die_with_status $? 'Failed to push develop'
+
+  git push --quiet upstream develop
+  [ $? -ne 0 ] && die_with_status $? 'Failed to push develop to upstream'
+
+  git push --quiet origin --tags "v$version"
+  [ $? -ne 0 ] && die_with_status $? 'Failed to push tags'
+
+  git push --quiet upstream --tags "v$version"
+  [ $? -ne 0 ] && die_with_status $? 'Failed to push tags to upstream'
+
+  git checkout --quiet master
+  [ $? -ne 0 ] && die_with_status $? 'Failed to checkout master'
+
+  git push --quiet origin master
+  [ $? -ne 0 ] && die_with_status $? 'Failed to push master'
+
+  git push --quiet upstream master
+  [ $? -ne 0 ] && die_with_status $? 'Failed to push master to upstream'
+
+  ###
+  # Remove release branch
+  say "Cleaning up $release_type branch $branch."
+  git push --quiet upstream ":$branch"
+  [ $? -ne 0 ] && die_with_status $? "Failed to cleanup $branch from upstream"
+
+  git branch --quiet -d "$branch"
+  [ $? -ne 0 ] && die_with_status $? "Failed to cleanup $branch"
+}
+
+case "$action" in
+  start ) start_release ;;
+  finish ) finish_release ;;
+  * ) die "$(usage)" ;;
+esac
+
+say "All done!"
