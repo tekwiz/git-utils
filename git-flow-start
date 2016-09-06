@@ -17,6 +17,8 @@ LONG_USAGE='Start a release/hotfix.'
 
 . "$(git --exec-path)/git-sh-setup"
 
+require_clean_work_tree finish "Ensure your working directory is clean."
+
 release_type="$1"
 [ -z "$release_type" ] && die "$(usage)"
 version="$2"
